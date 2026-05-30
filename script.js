@@ -104,11 +104,12 @@ async function generateInitialCaption(file) {
     }
   );
 
-  const data =
-    await response.json();
+  const data = await response.json();
 
-  return data.choices[0]
-    .message.content;
+  console.log("OPENAI RESPONSE:");
+  console.log(data);
+
+  return data.choices[0].message.content;
 }
 
 async function distortMemory(
