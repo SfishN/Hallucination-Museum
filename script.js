@@ -105,7 +105,7 @@ async function generateInitialCaption(
                 {
                   type: "text",
                   text:
-                    "Describe this image in a detailed and objective way."
+                    "Describe the most important visual elements in one concise sentence. No more than 30 words."
                 },
                 {
                   type: "image_url",
@@ -150,7 +150,10 @@ async function generateImage(
   const data =
     await response.json();
 
-  return data.image_url;
+  return (
+    "data:image/png;base64,"
+    + data.image_base64
+  );
 }
 
 async function imageUrlToFile(
