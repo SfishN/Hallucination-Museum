@@ -6,9 +6,13 @@ const museumGrid = document.getElementById("museumGrid");
 const WORKER_URL =
   "https://hallucination-museum.xind981.workers.dev";
 
+const FLASK_URL =
+  "http://127.0.0.1:5000/generate";
+
 let uploadedImageURL = null;
 
 imageInput.addEventListener("change", function () {
+
   const file = imageInput.files[0];
 
   if (!file) return;
@@ -19,181 +23,187 @@ imageInput.addEventListener("change", function () {
   originalImage.style.display = "block";
 });
 
-startButton.addEventListener("click", async function () {
+startButton.addEventListener(
+  "click",
+  async function () {
 
-  const file = imageInput.files[0];
+    const file = imageInput.files[0];
 
-  if (!file) {
-    alert("Please upload an image first.");
-    return;
+    if (!file) {
+
+      alert(
+        "Please upload an image first."
+      );
+
+      return;
+    }
+
+    museumGrid.innerHTML = "";
+
+    try {
+
+      await runHallucinationChain(
+        file
+      );
+
+    } catch (error) {
+
+      console.error(error);
+
+      alert(
+        "Generation failed."
+      );
+    }
   }
-
-  museumGrid.innerHTML = "";
-
-  try {
-
-    const initialCaption =
-      await generateInitialCaption(file);
-
-    await runHallucinationChain(
-      uploadedImageURL,
-      initialCaption
-    );
-
-  } catch (error) {
-
-    console.error(error);
-
-    alert(
-      "Failed to connect to GPT. Check console."
-    );
-  }
-});
+);
 
 function fileToBase64(file) {
 
-  return new Promise((resolve, reject) => {
+  return new Promise(
+    (resolve, reject) => {
 
-    const reader = new FileReader();
+      const reader =
+        new FileReader();
 
-    reader.onload = () => {
-      resolve(reader.result);
-    };
+      reader.onload =
+        () => resolve(
+          reader.result
+        );
 
-    reader.onerror = reject;
+      reader.onerror =
+        reject;
 
-    reader.readAsDataURL(file);
-
-  });
+      reader.readAsDataURL(
+        file
+      );
+    }
+  );
 }
 
-async function generateInitialCaption(file) {
+async function generateInitialCaption(
+  file
+) {
 
   const imageData =
     await fileToBase64(file);
 
-  const response = await fetch(
-    WORKER_URL,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type":
-          "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text:
-                  "Describe this image in a detailed and objective way."
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: imageData
+  const response =
+    await fetch(
+      WORKER_URL,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text:
+                    "Describe this image in a detailed and objective way."
+                },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: imageData
+                  }
                 }
-              }
-            ]
-          }
-        ]
-      })
-    }
-  );
-
-  const data = await response.json();
-
-  console.log("OPENAI RESPONSE:");
-  console.log(data);
-
-  return data.choices[0].message.content;
-}
-
-async function distortMemory(
-  previousMemory,
-  iteration
-) {
-
-  const prompt = `
-You are an unreliable memory system.
-
-The following text is a memory being recalled repeatedly.
-
-Iteration ${iteration}.
-
-Keep approximately 80% of the memory.
-
-Change 20%.
-
-Introduce:
-- uncertainty
-- omissions
-- mistaken details
-- false associations
-
-Memory:
-
-${previousMemory}
-
-Return only the rewritten memory.
-`;
-
-  const response = await fetch(
-    WORKER_URL,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type":
-          "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: prompt
-          }
-        ]
-      })
-    }
-  );
+              ]
+            }
+          ]
+        })
+      }
+    );
 
   const data =
     await response.json();
 
-  return data.choices[0]
+  return data
+    .choices[0]
     .message.content;
 }
 
-async function runHallucinationChain(
-  imageURL,
-  initialCaption
+async function generateImage(
+  caption
 ) {
 
-  let memory = initialCaption;
+  const response =
+    await fetch(
+      FLASK_URL,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+        body: JSON.stringify({
+          prompt: caption
+        })
+      }
+    );
 
-  addArtworkToMuseum({
-    round: 0,
-    imageURL,
-    caption: memory
-  });
+  const data =
+    await response.json();
 
-  for (let i = 1; i <= 10; i++) {
+  return data.image_url;
+}
 
-    memory =
-      await distortMemory(
-        memory,
-        i
+async function imageUrlToFile(
+  url
+) {
+
+  const response =
+    await fetch(url);
+
+  const blob =
+    await response.blob();
+
+  return new File(
+    [blob],
+    "generated.png",
+    {
+      type: "image/png"
+    }
+  );
+}
+
+async function runHallucinationChain(
+  file
+) {
+
+  let currentFile = file;
+
+  for (
+    let i = 0;
+    i < 5;
+    i++
+  ) {
+
+    const caption =
+      await generateInitialCaption(
+        currentFile
+      );
+
+    const imageURL =
+      await generateImage(
+        caption
       );
 
     addArtworkToMuseum({
-      round: i,
+      round: i + 1,
       imageURL,
-      caption: memory
+      caption
     });
+
+    currentFile =
+      await imageUrlToFile(
+        imageURL
+      );
   }
 }
 
@@ -204,7 +214,8 @@ function addArtworkToMuseum(
   const card =
     document.createElement("div");
 
-  card.className = "artwork";
+  card.className =
+    "artwork";
 
   const img =
     document.createElement("img");
@@ -215,8 +226,8 @@ function addArtworkToMuseum(
   const caption =
     document.createElement("p");
 
-  caption.textContent =
-    `Iteration ${artwork.round}: ${artwork.caption}`;
+  caption.innerHTML =
+    `<strong>Iteration ${artwork.round}</strong><br>${artwork.caption}`;
 
   card.appendChild(img);
 
