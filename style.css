@@ -76,3 +76,26 @@ button:hover {
   font-size: 14px;
   line-height: 1.4;
 }
+
+.hall-card {
+  background: white;
+  padding: 12px;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+  transition: transform 0.2s;
+}
+
+.hall-card:hover {
+  transform: translateY(-4px);
+}
+
+.hall-card a {
+  text-decoration: none;
+  color: inherit;
+}
+
+.hall-card img {
+  width: 100%;
+  display: block;
+  border-radius: 4px;
+}

@@ -2,37 +2,56 @@ const imageInput = document.getElementById("imageInput");
 const startButton = document.getElementById("startButton");
 const originalImage = document.getElementById("originalImage");
 const museumGrid = document.getElementById("museumGrid");
+const hallucinationSelect = document.getElementById("hallucinationLevel");
+const clearMuseumButton = document.getElementById("clearMuseumButton");
 
 const WORKER_URL =
   "https://hallucination-museum.xind981.workers.dev";
 
-const hallucinationSelect =
-  document.getElementById(
-    "hallucinationLevel"
-  );
+const MAX_HALLS = 5;
 
-// const FLASK_URL =
-//   "http://127.0.0.1:5000/generate";
+let museumHistory =
+  JSON.parse(
+    localStorage.getItem(
+      "museumHistory"
+    )
+  ) || [];
 
 let uploadedImageURL = null;
 
-imageInput.addEventListener("change", function () {
+window.addEventListener(
+  "load",
+  restoreMuseum
+);
 
-  const file = imageInput.files[0];
+imageInput.addEventListener(
+  "change",
+  function () {
 
-  if (!file) return;
+    const file =
+      imageInput.files[0];
 
-  uploadedImageURL = URL.createObjectURL(file);
+    if (!file) return;
 
-  originalImage.src = uploadedImageURL;
-  originalImage.style.display = "block";
-});
+    uploadedImageURL =
+      URL.createObjectURL(
+        file
+      );
+
+    originalImage.src =
+      uploadedImageURL;
+
+    originalImage.style.display =
+      "block";
+  }
+);
 
 startButton.addEventListener(
   "click",
   async function () {
 
-    const file = imageInput.files[0];
+    const file =
+      imageInput.files[0];
 
     if (!file) {
 
@@ -43,13 +62,57 @@ startButton.addEventListener(
       return;
     }
 
-    museumGrid.innerHTML = "";
+    startButton.disabled =
+      true;
 
     try {
 
-      await runHallucinationChain(
-        file
+      const hallId =
+        Date.now();
+
+      const originalBase64 =
+        await fileToBase64(
+          file
+        );
+
+      while (
+        museumHistory.length >=
+        MAX_HALLS
+      ) {
+
+        museumHistory.shift();
+      }
+
+      const hall = {
+
+        hallId,
+
+        originalImage:
+          originalBase64,
+
+        createdAt:
+          new Date().toISOString(),
+
+        artworks: []
+      };
+
+      museumHistory.push(
+        hall
       );
+
+      localStorage.setItem(
+        "museumHistory",
+        JSON.stringify(
+          museumHistory
+        )
+      );
+
+      await runHallucinationChain(
+        file,
+        hall
+      );
+
+      restoreMuseum();
 
     } catch (error) {
 
@@ -58,11 +121,41 @@ startButton.addEventListener(
       alert(
         "Generation failed."
       );
+
+    } finally {
+
+      startButton.disabled =
+        false;
     }
   }
 );
 
-function fileToBase64(file) {
+if (clearMuseumButton) {
+
+  clearMuseumButton.addEventListener(
+    "click",
+    () => {
+
+      localStorage.removeItem(
+        "museumHistory"
+      );
+
+      museumHistory = [];
+
+      restoreMuseum();
+    }
+  );
+}
+
+async function imageUrlToBase64(
+  url
+) {
+
+  const response =
+    await fetch(url);
+
+  const blob =
+    await response.blob();
 
   return new Promise(
     (resolve, reject) => {
@@ -71,9 +164,154 @@ function fileToBase64(file) {
         new FileReader();
 
       reader.onload =
-        () => resolve(
-          reader.result
-        );
+        () =>
+          resolve(
+            reader.result
+          );
+
+      reader.onerror =
+        reject;
+
+      reader.readAsDataURL(
+        blob
+      );
+    }
+  );
+}
+
+function restoreMuseum() {
+
+  museumGrid.innerHTML =
+    "";
+
+  for (
+    let i = 0;
+    i < MAX_HALLS;
+    i++
+  ) {
+
+    const hall =
+      museumHistory[i];
+
+    if (hall) {
+
+      createHallCard(
+        hall
+      );
+
+    } else {
+
+      createEmptyHall(
+        i + 1
+      );
+    }
+  }
+}
+
+function createHallCard(
+  hall
+) {
+
+  const card =
+    document.createElement(
+      "div"
+    );
+
+  card.className =
+    "artwork";
+
+  const date =
+    new Date(
+      hall.createdAt
+    ).toLocaleDateString(
+      "en-GB"
+    );
+
+  card.innerHTML =
+    `
+    <a
+      href="hall.html?id=${hall.hallId}"
+      style="
+        text-decoration:none;
+        color:black;
+      "
+    >
+
+      <img
+        src="${hall.originalImage}"
+      >
+
+      <h3>
+        Hall
+      </h3>
+
+      <p>
+        ${date}
+      </p>
+
+    </a>
+    `;
+
+  museumGrid.appendChild(
+    card
+  );
+}
+
+function createEmptyHall(
+  number
+) {
+
+  const card =
+    document.createElement(
+      "div"
+    );
+
+  card.className =
+    "artwork";
+
+  card.innerHTML =
+    `
+    <div
+      style="
+        height:250px;
+        border:4px dashed #ccc;
+        display:flex;
+        justify-content:center;
+        align-items:center;
+        color:#888;
+      "
+    >
+      Empty Hall
+    </div>
+
+    <h3>
+      Hall ${number}
+    </h3>
+    `;
+
+  museumGrid.appendChild(
+    card
+  );
+}
+
+function fileToBase64(
+  file
+) {
+
+  return new Promise(
+    (
+      resolve,
+      reject
+    ) => {
+
+      const reader =
+        new FileReader();
+
+      reader.onload =
+        () =>
+          resolve(
+            reader.result
+          );
 
       reader.onerror =
         reject;
@@ -91,53 +329,52 @@ async function generateInitialCaption(
 ) {
 
   const imageData =
-    await fileToBase64(file);
+    await fileToBase64(
+      file
+    );
 
   const level =
     hallucinationSelect.value;
 
-  let instruction = "";
-
   const strength =
-  (iteration + 1) * 20;
+    (iteration + 1) * 20;
 
-  if (level === "low") {
+  let instruction =
+    "";
+
+  if (
+    level === "low"
+  ) {
 
     instruction = `
-    Describe the image accurately.
-    Keep all major objects and composition.
-    Only introduce tiny speculative details.
-    Hallucination strength:${strength}/10.
-    Within 20 words.
-    `;
+Describe the image accurately.
+Keep all major objects and composition.
+Only introduce subtle changes.
+Hallucination strength: ${strength}/100.
+Within 20 words.
+`;
 
   } else if (
     level === "medium"
   ) {
 
     instruction = `
-    Describe the image as if it were a dream.
-    Preserve some original elements but
-    reinterpret their meaning.
-    Introduce unexpected objects,
-    atmosphere and symbolism.
-    Hallucination strength:${strength}/10.
-    Within 20 words.
-    `;
+Describe the image as a dream.
+Preserve some original elements.
+Reinterpret their meaning.
+Hallucination strength: ${strength}/100.
+Within 20 words.
+`;
 
   } else {
 
     instruction = `
-    Ignore literal reality.
-    Treat the image as a trigger for a
-    completely imagined scene.
-    Transform objects into new forms.
-    Invent creatures, architecture,
-    narratives and impossible events.
-    Make the description surreal.
-    Hallucination strength:${strength}/10.
-    Within 20 words.
-    `;
+Describe the image as a hallucination.
+Invent impossible scenes and structures.
+Detach from literal reality.
+Hallucination strength: ${strength}/100.
+Within 20 words.
+`;
   }
 
   const response =
@@ -145,24 +382,33 @@ async function generateInitialCaption(
       WORKER_URL,
       {
         method: "POST",
+
         headers: {
           "Content-Type":
             "application/json"
         },
+
         body: JSON.stringify({
           model: "gpt-4o",
+
           messages: [
             {
               role: "user",
+
               content: [
                 {
                   type: "text",
-                  text: instruction
+                  text:
+                    instruction
                 },
+
                 {
-                  type: "image_url",
+                  type:
+                    "image_url",
+
                   image_url: {
-                    url: imageData
+                    url:
+                      imageData
                   }
                 }
               ]
@@ -174,11 +420,6 @@ async function generateInitialCaption(
 
   const data =
     await response.json();
-
-  console.log(
-    "Fal response:",
-    data
-  );
 
   return data
     .choices[0]
@@ -194,13 +435,16 @@ async function generateImage(
       WORKER_URL,
       {
         method: "POST",
+
         headers: {
           "Content-Type":
             "application/json"
         },
+
         body: JSON.stringify({
           type: "image",
-          prompt: caption
+          prompt:
+            caption
         })
       }
     );
@@ -208,7 +452,9 @@ async function generateImage(
   const data =
     await response.json();
 
-  return data.images[0].url;
+  return data
+    .images[0]
+    .url;
 }
 
 async function imageUrlToFile(
@@ -216,7 +462,9 @@ async function imageUrlToFile(
 ) {
 
   const response =
-    await fetch(url);
+    await fetch(
+      url
+    );
 
   const blob =
     await response.blob();
@@ -225,16 +473,19 @@ async function imageUrlToFile(
     [blob],
     "generated.png",
     {
-      type: "image/png"
+      type:
+        "image/png"
     }
   );
 }
 
 async function runHallucinationChain(
-  file
+  file,
+  hall
 ) {
 
-  let currentFile = file;
+  let currentFile =
+    file;
 
   for (
     let i = 0;
@@ -253,44 +504,37 @@ async function runHallucinationChain(
         caption
       );
 
-    addArtworkToMuseum({
-      round: i + 1,
+    const imageBase64 =
+      await imageUrlToBase64(
+        imageURL
+      );
+
+    const artwork = {
+
+      round:
+        i + 1,
+
       imageURL,
+
+      imageBase64,
+
       caption
-    });
+    };
+
+    hall.artworks.push(
+      artwork
+    );
+
+    localStorage.setItem(
+      "museumHistory",
+      JSON.stringify(
+        museumHistory
+      )
+    );
 
     currentFile =
       await imageUrlToFile(
         imageURL
       );
   }
-}
-
-function addArtworkToMuseum(
-  artwork
-) {
-
-  const card =
-    document.createElement("div");
-
-  card.className =
-    "artwork";
-
-  const img =
-    document.createElement("img");
-
-  img.src =
-    artwork.imageURL;
-
-  const caption =
-    document.createElement("p");
-
-  caption.innerHTML =
-    `<strong>Iteration ${artwork.round}</strong><br>${artwork.caption}`;
-
-  card.appendChild(img);
-
-  card.appendChild(caption);
-
-  museumGrid.appendChild(card);
 }
