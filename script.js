@@ -6,8 +6,13 @@ const museumGrid = document.getElementById("museumGrid");
 const WORKER_URL =
   "https://hallucination-museum.xind981.workers.dev";
 
-const FLASK_URL =
-  "http://127.0.0.1:5000/generate";
+const hallucinationSelect =
+  document.getElementById(
+    "hallucinationLevel"
+  );
+
+// const FLASK_URL =
+//   "http://127.0.0.1:5000/generate";
 
 let uploadedImageURL = null;
 
@@ -81,11 +86,59 @@ function fileToBase64(file) {
 }
 
 async function generateInitialCaption(
-  file
+  file,
+  iteration
 ) {
 
   const imageData =
     await fileToBase64(file);
+
+  const level =
+    hallucinationSelect.value;
+
+  let instruction = "";
+
+  const strength =
+  (iteration + 1) * 20;
+
+  if (level === "low") {
+
+    instruction = `
+    Describe the image accurately.
+    Keep all major objects and composition.
+    Only introduce tiny speculative details.
+    Hallucination strength:${strength}/10.
+    Within 20 words.
+    `;
+
+  } else if (
+    level === "medium"
+  ) {
+
+    instruction = `
+    Describe the image as if it were a dream.
+    Preserve some original elements but
+    reinterpret their meaning.
+    Introduce unexpected objects,
+    atmosphere and symbolism.
+    Hallucination strength:${strength}/10.
+    Within 20 words.
+    `;
+
+  } else {
+
+    instruction = `
+    Ignore literal reality.
+    Treat the image as a trigger for a
+    completely imagined scene.
+    Transform objects into new forms.
+    Invent creatures, architecture,
+    narratives and impossible events.
+    Make the description surreal.
+    Hallucination strength:${strength}/10.
+    Within 20 words.
+    `;
+  }
 
   const response =
     await fetch(
@@ -104,8 +157,7 @@ async function generateInitialCaption(
               content: [
                 {
                   type: "text",
-                  text:
-                    "Describe the most important visual elements in one concise sentence. No more than 30 words."
+                  text: instruction
                 },
                 {
                   type: "image_url",
@@ -123,6 +175,11 @@ async function generateInitialCaption(
   const data =
     await response.json();
 
+  console.log(
+    "Fal response:",
+    data
+  );
+
   return data
     .choices[0]
     .message.content;
@@ -134,7 +191,7 @@ async function generateImage(
 
   const response =
     await fetch(
-      FLASK_URL,
+      WORKER_URL,
       {
         method: "POST",
         headers: {
@@ -142,6 +199,7 @@ async function generateImage(
             "application/json"
         },
         body: JSON.stringify({
+          type: "image",
           prompt: caption
         })
       }
@@ -150,10 +208,7 @@ async function generateImage(
   const data =
     await response.json();
 
-  return (
-    "data:image/png;base64,"
-    + data.image_base64
-  );
+  return data.images[0].url;
 }
 
 async function imageUrlToFile(
@@ -189,7 +244,8 @@ async function runHallucinationChain(
 
     const caption =
       await generateInitialCaption(
-        currentFile
+        currentFile,
+        i
       );
 
     const imageURL =
