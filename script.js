@@ -7,7 +7,30 @@ const hallucinationSelect = document.getElementById("hallucinationLevel");
 const WORKER_URL =
   "https://hallucination-museum.xind981.workers.dev";
 
-const MAX_HALLS = 5;
+const MAX_HALLS = 8;
+
+const progressContainer =
+  document.getElementById(
+    "progressContainer"
+  );
+
+const progressBar =
+  document.getElementById(
+    "progressBar"
+  );
+
+const progressText =
+  document.getElementById(
+    "progressText"
+  );
+
+const stages = [
+  "Reality Recorded",
+  "Memory Drift",
+  "Interpretation",
+  "Distortion",
+  "Hallucination",
+];
 
 let museumHistory = [];
 
@@ -59,6 +82,9 @@ startButton.addEventListener(
     startButton.disabled =
       true;
 
+    startButton.textContent =
+     "Generating...";
+
     try {
 
       const hallId =
@@ -90,6 +116,17 @@ startButton.addEventListener(
         hallId
       );
 
+      updateProgress(
+        0,
+        "Starting exhibition..."
+      );
+
+      museumHistory.unshift(
+        hall
+      );
+
+      renderMuseum();
+
       await runHallucinationChain(
         file,
         hall
@@ -104,7 +141,27 @@ startButton.addEventListener(
         hallId
       );
 
-      restoreMuseum();
+      // show hall immediately
+      museumHistory = [
+        hall,
+        ...museumHistory.filter(
+          h => h.hallId !== hall.hallId
+        )
+      ];
+
+      museumHistory =
+        museumHistory.slice(
+          0,
+          MAX_HALLS
+        );
+
+      renderMuseum();
+
+      // after 3 seconds, consistent with kv
+      // setTimeout(
+      //   restoreMuseum,
+      //   3000
+      // );
 
     } catch (error) {
 
@@ -118,6 +175,9 @@ startButton.addEventListener(
 
       startButton.disabled =
         false;
+
+      startButton.textContent =
+        "Start Iteration";
     }
   }
 );
@@ -155,9 +215,7 @@ async function imageUrlToBase64(
   );
 }
 
-async function restoreMuseum() {
-
-  await fetchMuseum();
+function renderMuseum() {
 
   museumGrid.innerHTML = "";
 
@@ -183,6 +241,13 @@ async function restoreMuseum() {
       );
     }
   }
+}
+
+async function restoreMuseum() {
+
+  await fetchMuseum();
+
+  renderMuseum();
 }
 
 function createHallCard(
@@ -517,16 +582,37 @@ async function runHallucinationChain(
     i++
   ) {
 
+    updateProgress(
+      i * 20,
+      `${i * 20}% ${stages[i]} — analysing artifact`
+    );
+
     const caption =
       await generateInitialCaption(
         currentFile,
         i
       );
 
+    updateProgress(
+      i * 20 + 7,
+      `${i * 20 + 7}% ${stages[i]} — constructing exhibition`
+    );
+
     const imageURL =
       await generateImage(
         caption
       );
+
+    updateProgress(
+      i * 20 + 14,
+      `${i * 20 + 14}% ${stages[i]} — framing artwork`
+    );
+
+
+    console.log(
+      "Generated image:",
+      imageURL
+    );
 
     const imageBase64 =
       await imageUrlToBase64(
@@ -549,9 +635,32 @@ async function runHallucinationChain(
       artwork
     );
 
+    renderMuseum();
+
     currentFile =
       await imageUrlToFile(
         imageURL
       );
+
   }
+
+  updateProgress(
+    100,
+    "100% Exhibition completed"
+  );
+}
+
+function updateProgress(
+  percent,
+  text
+) {
+
+  progressContainer.style.display =
+    "block";
+
+  progressBar.style.width =
+    `${percent}%`;
+
+  progressText.textContent =
+    text;
 }
