@@ -3,19 +3,13 @@ const startButton = document.getElementById("startButton");
 const originalImage = document.getElementById("originalImage");
 const museumGrid = document.getElementById("museumGrid");
 const hallucinationSelect = document.getElementById("hallucinationLevel");
-const clearMuseumButton = document.getElementById("clearMuseumButton");
 
 const WORKER_URL =
   "https://hallucination-museum.xind981.workers.dev";
 
 const MAX_HALLS = 5;
 
-let museumHistory =
-  JSON.parse(
-    localStorage.getItem(
-      "museumHistory"
-    )
-  ) || [];
+let museumHistory = [];
 
 let uploadedImageURL = null;
 
@@ -75,14 +69,6 @@ startButton.addEventListener(
           file
         );
 
-      while (
-        museumHistory.length >=
-        MAX_HALLS
-      ) {
-
-        museumHistory.shift();
-      }
-
       const hall = {
 
         hallId,
@@ -93,23 +79,29 @@ startButton.addEventListener(
         createdAt:
           new Date().toISOString(),
 
-        artworks: []
+        artworks: [],
+
+        level:
+          hallucinationSelect.value,
       };
 
-      museumHistory.push(
-        hall
-      );
-
-      localStorage.setItem(
-        "museumHistory",
-        JSON.stringify(
-          museumHistory
-        )
+      console.log(
+        "Creating Hall:",
+        hallId
       );
 
       await runHallucinationChain(
         file,
         hall
+      );
+
+      await saveHall(
+        hall
+      );
+
+      console.log(
+        "Saved Hall:",
+        hallId
       );
 
       restoreMuseum();
@@ -130,22 +122,6 @@ startButton.addEventListener(
   }
 );
 
-if (clearMuseumButton) {
-
-  clearMuseumButton.addEventListener(
-    "click",
-    () => {
-
-      localStorage.removeItem(
-        "museumHistory"
-      );
-
-      museumHistory = [];
-
-      restoreMuseum();
-    }
-  );
-}
 
 async function imageUrlToBase64(
   url
@@ -179,10 +155,11 @@ async function imageUrlToBase64(
   );
 }
 
-function restoreMuseum() {
+async function restoreMuseum() {
 
-  museumGrid.innerHTML =
-    "";
+  await fetchMuseum();
+
+  museumGrid.innerHTML = "";
 
   for (
     let i = 0;
@@ -479,6 +456,53 @@ async function imageUrlToFile(
   );
 }
 
+async function fetchMuseum() {
+
+  const response =
+    await fetch(
+      `${WORKER_URL}?action=getHalls`
+    );
+
+  museumHistory =
+    await response.json();
+}
+
+async function saveHall(
+  hall
+) {
+
+  const response =
+    await fetch(
+      WORKER_URL,
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+
+        body: JSON.stringify({
+          type:
+            "saveHall",
+
+          hall
+        })
+      }
+    );
+
+  const result =
+    await response.json();
+
+  console.log(
+    "saved hall",
+    result
+  );
+
+  return result;
+}
+
+
 async function runHallucinationChain(
   file,
   hall
@@ -523,13 +547,6 @@ async function runHallucinationChain(
 
     hall.artworks.push(
       artwork
-    );
-
-    localStorage.setItem(
-      "museumHistory",
-      JSON.stringify(
-        museumHistory
-      )
     );
 
     currentFile =

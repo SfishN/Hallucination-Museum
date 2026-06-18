@@ -24,7 +24,7 @@ async function loadHall() {
 
     const response =
       await fetch(
-        `${WORKER_URL}?action=getHall&id=${hallId}`
+        `${WORKER_URL}?action=special`
       );
 
     const hall =
